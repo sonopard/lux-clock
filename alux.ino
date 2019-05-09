@@ -1,3 +1,5 @@
+#define FASTLED_ALLOW_INTERRUPTS 0
+
 #include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
 #include <ArduinoOTA.h>
 #include <DNSServer.h>
@@ -6,9 +8,9 @@
 #include <FastLED.h>
 #include <NTPClient.h>
 
-#define DEBUG_L
+//#define DEBUG_L
 
-#define NUM_LEDS 231
+#define NUM_LEDS 64
 #define DATA_PIN D4
 #define MAX_INDICATORS 16
 CRGB leds[NUM_LEDS];
@@ -23,7 +25,7 @@ NTPClient ntp_client(ntp_udp, "europe.pool.ntp.org", 3600, 60000);
 
 typedef struct indicator_s indicator_t;
 
-typedef CRGB (*indicator_falloff_fn)(indicator_t& self, uint16_t i);
+typedef CRGB (*indicator_falloff_fn)(indicator_t& self, int32_t i);
 
 typedef struct indicator_s{
     uint32_t scale;
@@ -37,17 +39,19 @@ typedef struct indicator_s{
 
 indicator_t indicators[MAX_INDICATORS];
 
-CRGB falloff_quad(indicator_t& self, uint16_t i);
-indicator_t ind_builtin_quad = { .scale = UINT32_MAX, .value = NUM_LEDS, .colour = CRGB::AliceBlue, .width = 1, .id = 255, .rollover = false, .falloff = &falloff_quad };
+CRGB falloff_quad(indicator_t& self, int32_t i);
+indicator_t ind_builtin_quad = { .scale = UINT32_MAX, .value = NUM_LEDS-1, .colour = CRGB::AliceBlue, .width = 1, .id = 255, .rollover = false, .falloff = &falloff_quad };
 
-CRGB falloff_quad(indicator_t& self, uint16_t i){
+CRGB falloff_quad(indicator_t& self, int32_t i){
     int quad = self.value / 4;
+    if (i < 0 || i > NUM_LEDS)
+        return CRGB::Black;
     if (!(i % quad))
         return self.colour;
     return CRGB::Black;
 }
 
-CRGB falloff_blend(indicator_t& self, uint16_t i){
+CRGB falloff_blend(indicator_t& self, int32_t i){
     double s = NUM_LEDS / (double)self.scale;
     double v = self.value * s;
     double d = fabs((double)i - v);
@@ -61,10 +65,15 @@ CRGB falloff_blend(indicator_t& self, uint16_t i){
 
 int walk_ribbon(CRGB ribbon[], uint16_t ribbon_len, indicator_t indicators[]){
     FastLED.clear();
-    for(int walk = 0; walk < ribbon_len; walk++){
+    for(int walk = -12; walk < ribbon_len+12; walk++){
         for(int ind = 0; ind < MAX_INDICATORS; ind++){
             if(indicators[ind].id > 0 && indicators[ind].falloff != NULL){
-                ribbon[walk] += indicators[ind].falloff(indicators[ind], walk);
+                int w = walk;
+                if (w < 0)
+                    w = NUM_LEDS + w;
+                if (w >= NUM_LEDS)
+                    w = w - NUM_LEDS;
+                ribbon[w] += indicators[ind].falloff(indicators[ind], walk);
             }
         }
     }
@@ -80,7 +89,9 @@ void ind_init(){
     ind_clear();
     indicators[0] = ind_builtin_quad;
     indicators[1] = {.scale = 30000, .value = 500, .colour = CRGB::Red, .width = 12, .id = 1, .rollover = true, .falloff = &falloff_blend };
-    indicators[2] = {.scale = 60, .value = 40, .colour = CRGB::Blue, .width = 12, .id = 1, .rollover = false, .falloff = &falloff_blend };
+    indicators[2] = {.scale = 6000, .value = 4000, .colour = CRGB::Blue, .width = 5, .id = 1, .rollover = true, .falloff = &falloff_blend };
+    indicators[3] = {.scale = 6000, .value = 4000, .colour = CRGB::Yellow, .width = 7, .id = 1, .rollover = true, .falloff = &falloff_blend };
+    indicators[4] = {.scale = 1200, .value = 600, .colour = CRGB::Green, .width = 11, .id = 1, .rollover = true, .falloff = &falloff_blend };
 }
 
 void setup() {
@@ -155,12 +166,28 @@ void setup() {
     
     lux_udp.begin(LUX_UDP_PORT);
     ntp_client.begin();
+    ntp_client.update();
+    indicators[2].value = ntp_client.getSeconds()*100;
+}
+
+void smooth_clock(){
+    static int s_fn = ntp_client.getSeconds()*100;
+    static int m_fn = ntp_client.getMinutes()*100;
+    static int h_fn = (ntp_client.getHours()%12)*100;
+    
+    s_fn = ntp_client.getSeconds()*100;
+    m_fn = ntp_client.getMinutes()*100;
+    h_fn = (ntp_client.getHours()%12)*100;
+    
+    indicators[2].value = s_fn;
+    indicators[3].value = m_fn;
+    indicators[4].value = h_fn;
 }
 
 void loop() {
     static unsigned long arduino_ms_last_packet = millis();
     static unsigned long idle_frame = 0;
-
+    
     ArduinoOTA.handle();
     ntp_client.update();
 
@@ -177,7 +204,9 @@ void loop() {
     }
 
     if ((arduino_ms_last_packet + 2000) < millis()) {
-        indicators[2].value = ntp_client.getSeconds();
+            
+        smooth_clock();
+
         walk_ribbon(leds,NUM_LEDS,indicators);
         #ifndef DEBUG_L
         FastLED.show();
