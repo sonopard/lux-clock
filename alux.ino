@@ -1,6 +1,6 @@
 #define FASTLED_ALLOW_INTERRUPTS 0
 
-#include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
+#include <ESP8266WiFi.h>
 #include <ArduinoOTA.h>
 #include <DNSServer.h>
 #include <ESP8266WebServer.h>
@@ -8,12 +8,16 @@
 #include <FastLED.h>
 #include <NTPClient.h>
 
-//#define DEBUG_L
-
 #define NUM_LEDS 60
+#define HOUR_OFFSET +1
+#define ROTATION_OFFSET 30
+#define ROLLOVER_LIMIT 12
 #define DATA_PIN D4
 #define MAX_INDICATORS 16
+
 CRGB leds[NUM_LEDS];
+
+// TODO poor mans 'DST
 
 #define LUX_UDP_PORT 2342
 #define LUX_UDP_MAX 1024
@@ -64,7 +68,7 @@ CRGB falloff_blend(indicator_t& self, int32_t i){
 }
 
 int walk_ribbon(CRGB ribbon[], uint16_t ribbon_len, indicator_t indicators[]){
-    for(int walk = -12; walk < ribbon_len+12; walk++){
+    for(int walk = -ROLLOVER_LIMIT; walk < ribbon_len+ROLLOVER_LIMIT; walk++){
         for(int ind = 0; ind < MAX_INDICATORS; ind++){
             if(indicators[ind].id > 0 && indicators[ind].falloff != NULL){
                 int w;
@@ -73,7 +77,9 @@ int walk_ribbon(CRGB ribbon[], uint16_t ribbon_len, indicator_t indicators[]){
                     w = NUM_LEDS + w;
                 if (w >= NUM_LEDS)
                     w = w - NUM_LEDS;
-                Serial.println(w);
+                w += ROTATION_OFFSET;
+                if(w >= NUM_LEDS)
+                    w = w - NUM_LEDS;
                 ribbon[w] += indicators[ind].falloff(indicators[ind], walk);
             }
         }
@@ -89,10 +95,9 @@ void ind_clear(){
 void ind_init(){
     ind_clear();
     indicators[0] = ind_builtin_quad;
-    indicators[1] = {.scale = 30000, .value = 500, .colour = CRGB::Red, .width = 12, .id = 1, .rollover = true, .falloff = &falloff_blend };
     indicators[2] = {.scale = 6000, .value = 4000, .colour = CRGB::Blue, .width = 5, .id = 1, .rollover = true, .falloff = &falloff_blend };
     indicators[3] = {.scale = 6000, .value = 4000, .colour = CRGB::Yellow, .width = 7, .id = 1, .rollover = true, .falloff = &falloff_blend };
-    indicators[4] = {.scale = 1200, .value = 600, .colour = CRGB::Green, .width = 11, .id = 1, .rollover = true, .falloff = &falloff_blend };
+    indicators[4] = {.scale = 1200, .value = 600, .colour = CRGB::Green, .width = 9, .id = 1, .rollover = true, .falloff = &falloff_blend };
 }
 
 void setup() {
@@ -175,11 +180,34 @@ void smooth_clock(){
     static int s_fn = ntp_client.getSeconds()*100;
     static int m_fn = ntp_client.getMinutes()*100;
     static int h_fn = (ntp_client.getHours()%12)*100;
+    static int ms = millis();
+
+    int s_fn_ = ntp_client.getSeconds()*100;
+    int m_fn_ = ntp_client.getMinutes()*100;
+    int h_fn_ = (ntp_client.getHours()%12)*100;
+    int ms_ = millis();
+
+    if(ms_ - ms < 20)
+        return;
+
+    ms = ms_;
     
-    s_fn = ntp_client.getSeconds()*100;
-    m_fn = ntp_client.getMinutes()*100;
-    h_fn = (ntp_client.getHours()%12)*100;
-    
+    if(s_fn_ != s_fn){
+        s_fn += 12;
+        if((s_fn > s_fn_ && s_fn_ != 0 ) || s_fn >= 6000)
+            s_fn=s_fn_;
+    }
+    if(h_fn_ != h_fn){
+        h_fn += 1;
+        if((h_fn > h_fn_ && h_fn_ != 0 ) || h_fn >= 1200)
+            h_fn=h_fn_;
+    }
+    if(m_fn_ != m_fn){
+        m_fn += 6;
+        if((m_fn > m_fn_ && m_fn_ != 0 ) || m_fn >= 6000)
+            m_fn=m_fn_;
+    }
+
     indicators[2].value = s_fn;
     indicators[3].value = m_fn;
     indicators[4].value = h_fn;
