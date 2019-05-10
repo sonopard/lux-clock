@@ -14,6 +14,7 @@
 #define ROLLOVER_LIMIT 12
 #define DATA_PIN D4
 #define MAX_INDICATORS 16
+#define REVERSE 0
 
 CRGB leds[NUM_LEDS];
 
@@ -82,6 +83,11 @@ int walk_ribbon(CRGB ribbon[], uint16_t ribbon_len, indicator_t indicators[]){
                 w += ROTATION_OFFSET;
                 if(w >= NUM_LEDS)
                     w = w - NUM_LEDS;
+                if(REVERSE){
+                    w = -(w-NUM_LEDS);
+                    if(w==NUM_LEDS)
+                      w=0;
+                }
                 ribbon[w] += indicators[ind].falloff(indicators[ind], walk);
             }
         }
@@ -97,7 +103,7 @@ void ind_clear(){
 void ind_init(){
     ind_clear();
     indicators[0] = ind_builtin_quad;
-    indicators[1] = {.scale = 6000, .value = 4000, .colour = CRGB::Lavender, .width = 13, .id = 1, .rollover = true, .falloff = &falloff_blend };
+    //indicators[1] = {.scale = 6000, .value = 4000, .colour = CRGB::Lavender, .width = 13, .id = 1, .rollover = true, .falloff = &falloff_blend };
     indicators[2] = {.scale = 6000, .value = 4000, .colour = CRGB::Blue, .width = 5, .id = 2, .rollover = true, .falloff = &falloff_blend };
     indicators[3] = {.scale = 6000, .value = 4000, .colour = CRGB::Yellow, .width = 7, .id = 3, .rollover = true, .falloff = &falloff_blend };
     indicators[4] = {.scale = 1200, .value = 600, .colour = CRGB::Green, .width = 9, .id = 4, .rollover = true, .falloff = &falloff_blend };
@@ -171,7 +177,7 @@ void setup() {
 
     delay(2000);
     FastLED.addLeds<WS2812B, DATA_PIN, RGB>(leds, NUM_LEDS);
-    FastLED.setBrightness(24);
+    FastLED.setBrightness(14);
     
     lux_udp.begin(LUX_UDP_PORT);
     ntp_client.begin();
