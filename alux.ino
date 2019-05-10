@@ -17,7 +17,9 @@
 
 CRGB leds[NUM_LEDS];
 
-// TODO poor mans 'DST
+// TODO config UI using ESP8266WebServer
+// TODO lux/OLP improvements
+// TODO ArtNet
 
 #define LUX_UDP_PORT 2342
 #define LUX_UDP_MAX 1024
@@ -95,9 +97,10 @@ void ind_clear(){
 void ind_init(){
     ind_clear();
     indicators[0] = ind_builtin_quad;
-    indicators[2] = {.scale = 6000, .value = 4000, .colour = CRGB::Blue, .width = 5, .id = 1, .rollover = true, .falloff = &falloff_blend };
-    indicators[3] = {.scale = 6000, .value = 4000, .colour = CRGB::Yellow, .width = 7, .id = 1, .rollover = true, .falloff = &falloff_blend };
-    indicators[4] = {.scale = 1200, .value = 600, .colour = CRGB::Green, .width = 9, .id = 1, .rollover = true, .falloff = &falloff_blend };
+    indicators[1] = {.scale = 6000, .value = 4000, .colour = CRGB::Lavender, .width = 13, .id = 1, .rollover = true, .falloff = &falloff_blend };
+    indicators[2] = {.scale = 6000, .value = 4000, .colour = CRGB::Blue, .width = 5, .id = 2, .rollover = true, .falloff = &falloff_blend };
+    indicators[3] = {.scale = 6000, .value = 4000, .colour = CRGB::Yellow, .width = 7, .id = 3, .rollover = true, .falloff = &falloff_blend };
+    indicators[4] = {.scale = 1200, .value = 600, .colour = CRGB::Green, .width = 9, .id = 4, .rollover = true, .falloff = &falloff_blend };
 }
 
 void setup() {
@@ -176,15 +179,25 @@ void setup() {
     indicators[2].value = ntp_client.getSeconds()*100;
 }
 
+int offset_hours_12(){
+    int h = ntp_client.getHours()%12;
+    h += HOUR_OFFSET;
+    if(h<0)
+        h = 12 + h;
+    if(h>12) // 12 == 0, so this works correctly
+        h = h - 12;
+    return h;
+}
+
 void smooth_clock(){
     static int s_fn = ntp_client.getSeconds()*100;
     static int m_fn = ntp_client.getMinutes()*100;
-    static int h_fn = (ntp_client.getHours()%12)*100;
+    static int h_fn = (offset_hours_12())*100;
     static int ms = millis();
 
     int s_fn_ = ntp_client.getSeconds()*100;
     int m_fn_ = ntp_client.getMinutes()*100;
-    int h_fn_ = (ntp_client.getHours()%12)*100;
+    int h_fn_ = (offset_hours_12())*100;
     int ms_ = millis();
 
     if(ms_ - ms < 20)
@@ -232,10 +245,10 @@ void loop() {
         }
     }
 
+    smooth_clock();
+
     if ((arduino_ms_last_packet + 2000) < millis()) {
         FastLED.clear();
-
-        smooth_clock();
 
         walk_ribbon(leds,NUM_LEDS,indicators);
         #ifndef DEBUG_L
