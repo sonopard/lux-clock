@@ -10,7 +10,7 @@
 
 //#define DEBUG_L
 
-#define NUM_LEDS 64
+#define NUM_LEDS 60
 #define DATA_PIN D4
 #define MAX_INDICATORS 16
 CRGB leds[NUM_LEDS];
@@ -40,7 +40,7 @@ typedef struct indicator_s{
 indicator_t indicators[MAX_INDICATORS];
 
 CRGB falloff_quad(indicator_t& self, int32_t i);
-indicator_t ind_builtin_quad = { .scale = UINT32_MAX, .value = NUM_LEDS-1, .colour = CRGB::AliceBlue, .width = 1, .id = 255, .rollover = false, .falloff = &falloff_quad };
+indicator_t ind_builtin_quad = { .scale = UINT32_MAX, .value = NUM_LEDS, .colour = CRGB::AliceBlue, .width = 1, .id = 255, .rollover = false, .falloff = &falloff_quad };
 
 CRGB falloff_quad(indicator_t& self, int32_t i){
     int quad = self.value / 4;
@@ -64,15 +64,16 @@ CRGB falloff_blend(indicator_t& self, int32_t i){
 }
 
 int walk_ribbon(CRGB ribbon[], uint16_t ribbon_len, indicator_t indicators[]){
-    FastLED.clear();
     for(int walk = -12; walk < ribbon_len+12; walk++){
         for(int ind = 0; ind < MAX_INDICATORS; ind++){
             if(indicators[ind].id > 0 && indicators[ind].falloff != NULL){
-                int w = walk;
+                int w;
+                w = walk;
                 if (w < 0)
                     w = NUM_LEDS + w;
                 if (w >= NUM_LEDS)
                     w = w - NUM_LEDS;
+                Serial.println(w);
                 ribbon[w] += indicators[ind].falloff(indicators[ind], walk);
             }
         }
@@ -204,7 +205,8 @@ void loop() {
     }
 
     if ((arduino_ms_last_packet + 2000) < millis()) {
-            
+        FastLED.clear();
+
         smooth_clock();
 
         walk_ribbon(leds,NUM_LEDS,indicators);
