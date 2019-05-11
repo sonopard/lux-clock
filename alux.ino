@@ -71,7 +71,7 @@ CRGB falloff_blend(indicator_t& self, int32_t i) {
   double d = fabs((double)i - v);
   if (d < self.width / 2) {
     CRGB c = self.colour;
-    int b = (d / ((double)self.width / 2)) * (d / ((double)self.width / 2)) * 1.2f * 255;
+    int b = (d / ((double)self.width / 2)) * ((d / ((double)self.width / 2))*0.8f) * 3.8f * 255;
     c.fadeToBlackBy(min(b, 255));
     return c;
   }
@@ -120,9 +120,9 @@ void ind_init() {
   ind_clear();
   indicators[0] = ind_builtin_quad;
   indicators[1] = ind_builtin_12;
-  indicators[2] = {.scale = 6000, .value = 4000, .colour = CRGB::Blue, .width = 3, .id = 2, .rollover = true, .falloff = &falloff_blend };
-  indicators[3] = {.scale = 6000, .value = 4000, .colour = CRGB::Green, .width = 7, .id = 3, .rollover = true, .falloff = &falloff_blend };
-  indicators[4] = {.scale = 1200, .value = 600, .colour = CRGB::Red, .width = 9, .id = 4, .rollover = true, .falloff = &falloff_blend };
+  indicators[2] = {.scale = 6000, .value = 4000, .colour = CRGB::DarkCyan, .width = 3, .id = 2, .rollover = true, .falloff = &falloff_blend };
+  indicators[3] = {.scale = 6000, .value = 4000, .colour = CRGB::Olive, .width = 7, .id = 3, .rollover = true, .falloff = &falloff_blend };
+  indicators[4] = {.scale = 1200, .value = 600, .colour = CRGB::MediumVioletRed, .width = 9, .id = 4, .rollover = true, .falloff = &falloff_blend };
 }
 
 void setup() {
