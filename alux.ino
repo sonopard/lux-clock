@@ -8,11 +8,13 @@
 #include <FastLED.h>
 #include <NTPClient.h>
 
+#define HOSTNAME "olp_bigclock"
 #define NUM_LEDS 120
 #define HOUR_OFFSET +1
 #define ROTATION_OFFSET 0
 #define REVERSE 1
 #define DATA_PIN D4
+#define BRIGHTNESS 255
 
 #define ROLLOVER_LIMIT 12
 #define MAX_INDICATORS 16
@@ -51,8 +53,6 @@ indicator_t ind_builtin_quad = { .scale = UINT32_MAX, .value = NUM_LEDS, .colour
 
 CRGB falloff_12(indicator_t& self, int32_t i) {
   int h12 = self.value / 12;
-  if (i < 0 || i > NUM_LEDS)
-    return CRGB::Black;
   if (!(i % h12))
     return self.colour;
   return CRGB::Black;
@@ -60,8 +60,6 @@ CRGB falloff_12(indicator_t& self, int32_t i) {
 
 CRGB falloff_quad(indicator_t& self, int32_t i) {
   int quad = self.value / 4;
-  if (i < 0 || i > NUM_LEDS)
-    return CRGB::Black;
   if (!(i % quad))
     return self.colour;
   return CRGB::Black;
@@ -73,7 +71,7 @@ CRGB falloff_blend(indicator_t& self, int32_t i) {
   double d = fabs((double)i - v);
   if (d < self.width / 2) {
     CRGB c = self.colour;
-    int b = (d / ((double)self.width / 2)) * 255;
+    int b = (d / ((double)self.width / 2)) * (d / ((double)self.width / 2)) * 1.2f * 255;
     c.fadeToBlackBy(min(b, 255));
     return c;
   }
@@ -86,11 +84,15 @@ int walk_ribbon(CRGB ribbon[], uint16_t ribbon_len, indicator_t indicators[]) {
       if (indicators[ind].id > 0 && indicators[ind].falloff != NULL) {
         int w = walk;
 
-        // for rollover
-        if (w < 0)
-          w = NUM_LEDS + w;
-        if (w >= NUM_LEDS)
-          w = w - NUM_LEDS;
+        if(indicators[ind].rollover){
+          if (w < 0)
+            w = NUM_LEDS + w;
+          if (w >= NUM_LEDS)
+            w = w - NUM_LEDS;
+        } else {
+          if (w < 0 || w >= NUM_LEDS)
+            continue;
+        }
 
         w += ROTATION_OFFSET;
         if (w >= NUM_LEDS)
@@ -126,7 +128,7 @@ void ind_init() {
 void setup() {
   Serial.begin(115200);
 
-  WiFi.hostname("olp_bigclock");
+  WiFi.hostname(HOSTNAME);
   WiFiManager wifiManager;
   //reset saved settings
   //wifiManager.resetSettings();
@@ -134,10 +136,10 @@ void setup() {
   //fetches ssid and pass from eeprom and tries to connect
   //if it does not connect it starts an access point with the specified name
   //and goes into a blocking loop awaiting configuration
-  wifiManager.autoConnect("OLPClockAP");
+  wifiManager.autoConnect(HOSTNAME);
   Serial.println("connected...yeey :)");
 
-  ArduinoOTA.setHostname("olp_bigclock");
+  ArduinoOTA.setHostname(HOSTNAME);
   ArduinoOTA.onStart([]() {
     String type;
     if (ArduinoOTA.getCommand() == U_FLASH) {
@@ -178,7 +180,7 @@ void setup() {
   ind_init();
 
   FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);
-  FastLED.setBrightness(255);
+  FastLED.setBrightness(BRIGHTNESS);
   FastLED.setDither(0);
 
   lux_udp.begin(LUX_UDP_PORT);
@@ -235,6 +237,8 @@ void smooth_clock() {
 void loop() {
   static unsigned long ms_last_packet = millis();
   static unsigned long idle_frame = 0;
+  static IPAddress last_contact;
+  static uint16_t last_contact_port = 0;
 
   ArduinoOTA.handle();
   ntp_client.update();
@@ -248,6 +252,8 @@ void loop() {
       memcpy(leds, lux_data, min(NUM_LEDS, len));
       FastLED.show();
       ms_last_packet = millis();
+      last_contact = lux_udp.remoteIP();
+      last_contact_port = lux_udp.remotePort();
     }
   }
 
@@ -257,16 +263,27 @@ void loop() {
     FastLED.clear();
 
     walk_ribbon(leds, NUM_LEDS, indicators);
-#ifndef DEBUG_L
+
+    if (last_contact_port > 0) {
+      lux_udp.beginPacket(last_contact, last_contact_port);
+      lux_udp.write("\n");
+      char l[2];
+      for (int d = 0; d < NUM_LEDS; d++) {
+        sprintf(l, "%02X", leds[d].getLuma());
+        lux_udp.write(l);
+      }
+      lux_udp.endPacket();  
+    }
+    
     FastLED.show();
-#else
-    Serial.println();
+    #ifdef DEBUG_L
     char l[2];
     for (int d = 0; d < NUM_LEDS; d++) {
       sprintf(l, "%02X", leds[d].getLuma());
       Serial.print(l);
     }
-#endif
+    Serial.println();
     delay(20);
+    #endif
   }
 }
