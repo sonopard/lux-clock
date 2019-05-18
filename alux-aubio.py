@@ -55,9 +55,9 @@ while True:
         # compute energy of current block
         energy = np.sum(samples**2)/len(samples)
         # do something with the results
-        f_scaled = (int)((freq))%120
+        f_scaled = (int)((freq))%360
         if f_scaled > (num_leds)-1:
-            f_scaled = (num_leds)-1
+            f_scaled = f_scaled % num_leds
         e_scaled = (int)(energy * 255 * 24)
         if e_scaled > 255:
             e_scaled = 255
