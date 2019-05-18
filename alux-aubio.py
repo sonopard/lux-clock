@@ -31,7 +31,7 @@ recorder.setchannels(1)
 a_tempo = aubio.tempo("default", win_s, hop_s, samplerate)
 # create aubio pitch detection (first argument is method, "default" is
 # "yinfft", can also be "yin", "mcomb", fcomb", "schmitt").
-pitcher = aubio.pitch("schmitt", win_s, hop_s, samplerate)
+pitcher = aubio.pitch("default", win_s, hop_s, samplerate)
 pitcher_2 = aubio.pitch("default", win_s, hop_s, samplerate)
 # set output unit (can be 'midi', 'cent', 'Hz', ...)
 pitcher.set_unit("Hz")
