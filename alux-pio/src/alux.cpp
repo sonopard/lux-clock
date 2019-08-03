@@ -267,9 +267,6 @@ void loop() {
 
   if (led_data_length + 2 <= lux_data_index) {
     
-    sprintf(l, "complete: %d, %d\n", led_data_length, lux_data_index);
-    Serial.println(l);
-    
     memcpy((char*)leds, &(lux_data[2]), min(NUM_LEDS * sizeof(CRGB), (unsigned int) led_data_length));
     FastLED.show();
     ms_last_packet = millis();
@@ -277,8 +274,6 @@ void loop() {
     last_contact_port = lux_udp.remotePort();
 
     uint16_t overhang = lux_data_index - (led_data_length + 2);
-    sprintf(l, "over: %d\n", overhang);
-    Serial.println(l);
     
     if (overhang) {
       memmove(lux_data, &(lux_data[led_data_length + 2]), overhang);
