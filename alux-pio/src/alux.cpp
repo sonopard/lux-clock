@@ -1,5 +1,6 @@
 #define FASTLED_ALLOW_INTERRUPTS 0
 
+#include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <ArduinoOTA.h>
 #include <DNSServer.h>
@@ -22,9 +23,9 @@
 CRGB leds[NUM_LEDS];
 
 #define LUX_UDP_PORT 2342
-#define LUX_UDP_MAX 65507
+#define LUX_UDP_MAX 32000
 
-char lux_data[LUX_UDP_MAX];
+uint8_t lux_data[LUX_UDP_MAX];
 
 WiFiUDP lux_udp;
 
@@ -248,33 +249,43 @@ void loop() {
 
   static uint16_t lux_data_index = 0;
   static uint16_t led_data_length = 0;
+  char l[20];
 
   if (lux_udp.parsePacket()) {
-    lux_data_index += lux_udp.read(lux_data, LUX_UDP_MAX - lux_data_index)
+    lux_data_index += lux_udp.read(&(lux_data[lux_data_index]), LUX_UDP_MAX - lux_data_index);
   }
 
   if (lux_data_index >= 2 && led_data_length == 0) {
     led_data_length = lux_data[0] << 8;
-    led_data_length = lux_data[1];
+    led_data_length += lux_data[1];
 
-    if (led_data_length > LUX_UDP_MAX - 2 || led_data_length < 3) {
+    if ((led_data_length > LUX_UDP_MAX - 2) || (led_data_length < 3)) {
       led_data_length = 0;
       lux_data_index = 0;
     }
   }
 
   if (led_data_length + 2 <= lux_data_index) {
-    memcpy((void*)leds, &lux_data[3], min(NUM_LEDS * sizeof(CRGB), led_data_length));
+    
+    sprintf(l, "complete: %d, %d\n", led_data_length, lux_data_index);
+    Serial.println(l);
+    
+    memcpy((char*)leds, &(lux_data[2]), min(NUM_LEDS * sizeof(CRGB), (unsigned int) led_data_length));
     FastLED.show();
     ms_last_packet = millis();
     last_contact = lux_udp.remoteIP();
     last_contact_port = lux_udp.remotePort();
 
-    uint16_t overlength = lux_data_index - led_data_length + 2;
+    uint16_t overhang = lux_data_index - (led_data_length + 2);
+    sprintf(l, "over: %d\n", overhang);
+    Serial.println(l);
     
-    if (overlength) {
-      memmove(lux_data, &lux_data[led_data_length + 2], overlength);
-      lux_data_index = overlength;
+    if (overhang) {
+      memmove(lux_data, &(lux_data[led_data_length + 2]), overhang);
+      lux_data_index = overhang;
+      led_data_length = 0;
+    } else {
+      lux_data_index = 0;
       led_data_length = 0;
     }
   }
