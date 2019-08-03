@@ -48,6 +48,7 @@ while True:
         _, data = recorder.read()
         # convert data to aubio float samples
         samples = np.frombuffer(data, dtype=aubio.float_type)
+        samples = np.pad(samples, (0, framesize - len(samples)), 'edge')
         # pitch of current frame
         freq = pitcher(samples)[0]
         note = pitcher_2(samples)[0]
@@ -71,7 +72,9 @@ while True:
             for i, l in enumerate(leds):
                 if np.sum(l) < 10:
                     leds[i] = (0x30,0x30,0x30)
-        sock.sendto(bytearray(list(chain.from_iterable(leds))),("10.23.42.103", 2342))
+        data = list(chain.from_iterable(leds))
+        data = bytes([int(len(data) / 256), len(data) % 256] + data)
+        sock.sendto(data,("olp_bigclock", 2342))
         v = chain.from_iterable(leds)
         v =  [(int)(max(0, x - (x * x * 0.0015))) for x in v]
         v_it = iter(v)
