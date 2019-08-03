@@ -22,8 +22,10 @@
 CRGB leds[NUM_LEDS];
 
 #define LUX_UDP_PORT 2342
-#define LUX_UDP_MAX 1024
+#define LUX_UDP_MAX 65507
+
 char lux_data[LUX_UDP_MAX];
+
 WiFiUDP lux_udp;
 
 WiFiUDP ntp_udp;
@@ -239,21 +241,41 @@ void loop() {
   static unsigned long idle_frame = 0;
   static IPAddress last_contact;
   static uint16_t last_contact_port = 0;
+  static uint16_t remaining_size = 0;
 
   ArduinoOTA.handle();
   ntp_client.update();
 
-  int received_size = lux_udp.parsePacket();
-  if (received_size)
-  {
-    int len = lux_udp.read(lux_data, LUX_UDP_MAX);
-    if (len > 0)
-    {
-      memcpy(leds, lux_data, min(NUM_LEDS, len));
-      FastLED.show();
-      ms_last_packet = millis();
-      last_contact = lux_udp.remoteIP();
-      last_contact_port = lux_udp.remotePort();
+  static uint16_t lux_data_index = 0;
+  static uint16_t led_data_length = 0;
+
+  if (lux_udp.parsePacket()) {
+    lux_data_index += lux_udp.read(lux_data, LUX_UDP_MAX - lux_data_index)
+  }
+
+  if (lux_data_index >= 2 && led_data_length == 0) {
+    led_data_length = lux_data[0] << 8;
+    led_data_length = lux_data[1];
+
+    if (led_data_length > LUX_UDP_MAX - 2 || led_data_length < 3) {
+      led_data_length = 0;
+      lux_data_index = 0;
+    }
+  }
+
+  if (led_data_length + 2 <= lux_data_index) {
+    memcpy((void*)leds, &lux_data[3], min(NUM_LEDS * sizeof(CRGB), led_data_length));
+    FastLED.show();
+    ms_last_packet = millis();
+    last_contact = lux_udp.remoteIP();
+    last_contact_port = lux_udp.remotePort();
+
+    uint16_t overlength = lux_data_index - led_data_length + 2;
+    
+    if (overlength) {
+      memmove(lux_data, &lux_data[led_data_length + 2], overlength);
+      lux_data_index = overlength;
+      led_data_length = 0;
     }
   }
 
