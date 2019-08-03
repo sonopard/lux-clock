@@ -50,6 +50,8 @@ while True:
         samples = np.frombuffer(data, dtype=aubio.float_type)
         samples = np.pad(samples, (0, framesize - len(samples)), 'edge')
         # pitch of current frame
+        if len(samples) < 1:
+            continue
         freq = pitcher(samples)[0]
         note = pitcher_2(samples)[0]
         is_beat = a_tempo(samples)
